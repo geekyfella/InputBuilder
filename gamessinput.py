@@ -6,56 +6,54 @@ import os
 class ComputationalChemistryInputBuilder(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Computational Chemistry Input Builder")
+        self.title("Input Builder")
         self.geometry_file = ""
         
-        # Define arrays for various parameters
-        self.options = {
-            'GUESS': ["HUCKEL", "HCore"],
-            'RUNTYP': ["Energy", "Hassian", "Optimization"],
-            'SCFMETH': ["RHF", "UHF", "ROHF", "GVB", "MCSCF"],
-            'LVL': ["LEVL2", "DFT"],
-            'CHARGE': list(map(str, range(6))),  # Converts integers to strings
+                                                
+        self.options = {                                              #
+            'GUESS': ["HUCKEL", "HCore"],                             # 
+            'RUNTYP': ["Energy", "Hassian", "Optimization"],          # Define arrays for various parameters
+            'SCFMETH': ["RHF", "UHF", "ROHF", "GVB", "MCSCF"],        #
+            'LVL': ["LEVL2", "DFT"],                                  #
+            'CHARGE': list(map(str, range(6))),     
             'SPIN': ["1", "2"],
             'MEMORY': ["10", "20", "30"],
             'MEMDDI': ["1", "2", "3"],
             'BASIS': ["cc-pVDZ", "cc-pVTZ", "cc-pVQZ"]
         }
         
-        # Initialize default parameter values
-        self.parameter_values = {key: self.options[key][0] for key in self.options}
         
-        # Create GUI elements
-        self.create_widgets()
+        self.parameter_values = {key: self.options[key][0] for key in self.options}    # Initialize default parameter values  
+        
+        
+        self.create_widgets()      # Create GUI elements
 
     def create_widgets(self):
         # Create the widgets dynamically
-        self.widgets = {}
+        row = 0
         for i, (key, values) in enumerate(self.options.items()):
             label = tk.Label(self, text=key + ":")
-            label.pack()
+            label.grid(row=row // 2, column=(row % 2) * 2, sticky=tk.W, padx=5, pady=5)
             variable = tk.StringVar(self)
             variable.set(values[0])  # default value
             self.parameter_values[key] = values[0]  # set default
             option_menu = tk.OptionMenu(self, variable, *values, command=lambda value, k=key: self.set_value(k, value))
-            option_menu.pack()
-            self.widgets[key] = variable
+            option_menu.grid(row=row // 2, column=(row % 2) * 2 + 1, sticky=tk.EW, padx=5, pady=5)
+            row += 1
 
-        # Geometry File Button
+        # Buttons for geometry, generation, and save
         geom_button = tk.Button(self, text="Import Geometry File", command=self.import_geometry)
-        geom_button.pack()
+        geom_button.grid(row=(row + 1) // 2, column=0, columnspan=2, pady=10, padx=5)
 
-        # Generate Input Button
         generate_button = tk.Button(self, text="Generate Input", command=self.generate_input)
-        generate_button.pack()
+        generate_button.grid(row=(row + 3) // 2, column=0, columnspan=2, pady=10, padx=5)
 
-        # Save Input File Button
         save_button = tk.Button(self, text="Save Input File", command=self.save_input_file)
-        save_button.pack()
+        save_button.grid(row=(row + 5) // 2, column=0, columnspan=2, pady=10, padx=5)
 
         # Output Text Area
-        self.output_text = tk.Text(self, height=20, width=80)
-        self.output_text.pack()
+        self.output_text = tk.Text(self, height=10, width=80)
+        self.output_text.grid(row=(row + 7) // 2, column=0, columnspan=2, pady=10, padx=5)
 
     def set_value(self, key, value):
         self.parameter_values[key] = value
