@@ -1,107 +1,107 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import textwrap
+import os
 
 class ComputationalChemistryInputBuilder(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Computational Chemistry Input Builder")
-
-        # Initialize default parameter values
-        self.parameter_values = {
-            'basis_set': 'cc-pVTZ',
-            'functional': 'B3LYP',
-            'charge': 0,
-            'multiplicity': 1,
-            'geometry_file': ''
+        self.geometry_file = ""
+        
+        # Define arrays for various parameters
+        self.options = {
+            'GUESS': ["HUCKEL", "HCore"],
+            'RUNTYP': ["Energy", "Hassian", "Optimization"],
+            'SCFMETH': ["RHF", "UHF", "ROHF", "GVB", "MCSCF"],
+            'LVL': ["LEVL2", "DFT"],
+            'CHARGE': list(map(str, range(6))),  # Converts integers to strings
+            'SPIN': ["1", "2"],
+            'MEMORY': ["10", "20", "30"],
+            'MEMDDI': ["1", "2", "3"],
+            'BASIS': ["cc-pVDZ", "cc-pVTZ", "cc-pVQZ"]
         }
-
+        
+        # Initialize default parameter values
+        self.parameter_values = {key: self.options[key][0] for key in self.options}
+        
         # Create GUI elements
         self.create_widgets()
 
     def create_widgets(self):
-        # Basis Set
-        self.basis_label = tk.Label(self, text="Basis Set:")
-        self.basis_label.pack()
-        self.basis_entry = tk.Entry(self)
-        self.basis_entry.insert(0, self.parameter_values['basis_set'])
-        self.basis_entry.pack()
+        # Create the widgets dynamically
+        self.widgets = {}
+        for i, (key, values) in enumerate(self.options.items()):
+            label = tk.Label(self, text=key + ":")
+            label.pack()
+            variable = tk.StringVar(self)
+            variable.set(values[0])  # default value
+            self.parameter_values[key] = values[0]  # set default
+            option_menu = tk.OptionMenu(self, variable, *values, command=lambda value, k=key: self.set_value(k, value))
+            option_menu.pack()
+            self.widgets[key] = variable
 
-        # Functional
-        self.functional_label = tk.Label(self, text="Functional:")
-        self.functional_label.pack()
-        self.functional_entry = tk.Entry(self)
-        self.functional_entry.insert(0, self.parameter_values['functional'])
-        self.functional_entry.pack()
-
-        # Charge
-        self.charge_label = tk.Label(self, text="Charge:")
-        self.charge_label.pack()
-        self.charge_entry = tk.Entry(self)
-        self.charge_entry.insert(0, str(self.parameter_values['charge']))
-        self.charge_entry.pack()
-
-        # Multiplicity
-        self.multiplicity_label = tk.Label(self, text="Multiplicity:")
-        self.multiplicity_label.pack()
-        self.multiplicity_entry = tk.Entry(self)
-        self.multiplicity_entry.insert(0, str(self.parameter_values['multiplicity']))
-        self.multiplicity_entry.pack()
-
-        # Geometry File
-        self.geometry_label = tk.Label(self, text="Geometry File:")
-        self.geometry_label.pack()
-        self.geometry_entry = tk.Entry(self, width=50)
-        self.geometry_entry.pack()
-
-        self.browse_button = tk.Button(self, text="Browse", command=self.browse_geometry_file)
-        self.browse_button.pack()
+        # Geometry File Button
+        geom_button = tk.Button(self, text="Import Geometry File", command=self.import_geometry)
+        geom_button.pack()
 
         # Generate Input Button
-        self.generate_button = tk.Button(self, text="Generate Input", command=self.generate_input)
-        self.generate_button.pack()
+        generate_button = tk.Button(self, text="Generate Input", command=self.generate_input)
+        generate_button.pack()
+
+        # Save Input File Button
+        save_button = tk.Button(self, text="Save Input File", command=self.save_input_file)
+        save_button.pack()
 
         # Output Text Area
         self.output_text = tk.Text(self, height=20, width=80)
         self.output_text.pack()
 
-    def browse_geometry_file(self):
-        geometry_file = filedialog.askopenfilename(filetypes=[("XYZ Files", "*.xyz")])
-        if geometry_file:
-            self.geometry_entry.delete(0, tk.END)
-            self.geometry_entry.insert(0, geometry_file)
+    def set_value(self, key, value):
+        self.parameter_values[key] = value
+
+    def import_geometry(self):
+        # Open a file dialog to choose the geometry file
+        filename = filedialog.askopenfilename(filetypes=[("XYZ files", "*.xyz"), ("All files", "*.*")])
+        if filename:
+            self.geometry_file = filename
+            messagebox.showinfo("File Selected", f"Geometry file selected: {os.path.basename(filename)}")
+        else:
+            messagebox.showinfo("File Selection Cancelled", "No file was selected.")
 
     def generate_input(self):
-        # Update parameter values based on user input
-        self.parameter_values['basis_set'] = self.basis_entry.get()
-        self.parameter_values['functional'] = self.functional_entry.get()
-        self.parameter_values['charge'] = int(self.charge_entry.get())
-        self.parameter_values['multiplicity'] = int(self.multiplicity_entry.get())
-        self.parameter_values['geometry_file'] = self.geometry_entry.get()
-
         # Generate the input file content
         input_content = self.generate_input_content()
-
         # Display the input file content in the output text area
         self.output_text.delete("1.0", tk.END)
         self.output_text.insert(tk.END, input_content)
-
         messagebox.showinfo("Success", "Input file generated successfully!")
 
     def generate_input_content(self):
         # Sample input file content generation based on the parameters
+        parameters_text = "\n".join(f"{key}: {self.parameter_values[key]}" for key in self.options)
+        geom_content = ""
+        if self.geometry_file:
+            with open(self.geometry_file, 'r') as file:
+                geom_content = file.read()
         input_template = textwrap.dedent(f"""
             # Computational Chemistry Input File
-            Basis Set: {self.parameter_values['basis_set']}
-            Functional: {self.parameter_values['functional']}
-            Charge: {self.parameter_values['charge']}
-            Multiplicity: {self.parameter_values['multiplicity']}
-            
-            Geometry:
-            # Insert geometry from file: {self.parameter_values['geometry_file']}
+            {parameters_text}
+            # Geometry
+            {geom_content}
         """)
-
         return input_template
+
+    def save_input_file(self):
+        # Save the generated input content to a file
+        input_content = self.generate_input_content()
+        file_path = filedialog.asksaveasfilename(defaultextension=".inp", filetypes=[("Input files", "*.inp"), ("All files", "*.*")])
+        if file_path:
+            with open(file_path, 'w') as file:
+                file.write(input_content)
+            messagebox.showinfo("File Saved", f"Input file saved as: {os.path.basename(file_path)}")
+        else:
+            messagebox.showinfo("Save Cancelled", "File save operation was cancelled.")
 
 if __name__ == "__main__":
     app = ComputationalChemistryInputBuilder()

@@ -3,71 +3,76 @@
 
 
 from __future__ import absolute_import, unicode_literals, division, print_function
-import re
 import sys
 import textwrap
-import subprocess
-import numpy as np
-
-if sys.version_info.major>2:
-    from configparser import ConfigParser as ConfigParser
-else :
-    from ConfigParser import SafeConfigParser as ConfigParser
+from configparser import ConfigParser
 
 class GamessOptg():
-
     def __init__(self, config):
-        scf = ConfigParser({'path':'rungms','symmetry':'c1','processor':'1'})
-        scf.read(config)
+        self.config = ConfigParser()
+        self.config.read(config)
+        
+        # Set default values if not present
+        self.config_defaults = {
+            'path': 'rungms',
+            'symmetry': 'c1',
+            'processor': '1'
+        }
 
-        self.optInfo  = dict(scf.items('optInfo'))
-        for key in ['memory', 'memddi', 'basis', 'method', 'spin', 'charge', 'symmetry']:
-            if key not in self.optInfo:
-                raise Exception('Option "%s" not found in config'%key)
-        try:
-            self.geomFile = scf.get('gInfo','file')
-        except:
-            raise KeyError('Initial geometry file not found in config')
-        self.CreateTemplate()
+        # Ensure the section and required options exist
+        if not self.config.has_section('optInfo'):
+            raise ValueError("The configuration file is missing the 'optInfo' section.")
+        
+        required_keys = ['memory', 'memddi', 'basis', 'method', 'spin', 'charge']
+        missing_keys = [key for key in required_keys if key not in self.config['optInfo']]
+        if missing_keys:
+            raise ValueError("Missing required configuration keys: " + ", ".join(missing_keys))
+        
+        # Load optional geometry file path
+        self.geomFile = self.config.get('gInfo', 'file', fallback=None)
+        if not self.geomFile:
+            raise FileNotFoundError("Initial geometry file path not provided in 'gInfo' section.")
 
+        self.create_template()
 
-    def CreateTemplate(self):
-        indent = lambda txt:'\n'.join([' '+i.strip() for i in filter(None,txt.split('\n'))])
-        with open(self.geomFile) as f: geomDat = f.read()
-        self.nAtoms = len(list(filter(None,geomDat.split('\n'))))
+    def create_template(self):
+        with open(self.geomFile, 'r') as file:
+            geom_data = file.read()
+        n_atoms = len([line for line in geom_data.split('\n') if line.strip()])
 
-        gamessTemplate = textwrap.dedent('''
-                                            $CONTRL SCFTYP={scfmeth} {lvl} RUNTYP=OPTIMIZE ICHARG={charge}
-                                            COORD=UNIQUE MULT={spin} MAXIT=200 ISPHER=1 $END
-                                            $SYSTEM MWORDS={memory} MEMDDI ={memddi} $END
-                                            {pre}
-                                            $STATPT NSTEP=100 HSSEND=.T. $END
-                                            {post}
-                                            $BASIS  GBASIS={basis} $END
-                                            $GUESS  GUESS=HUCKEL $END
-                                            $DATA
-                                            optg and freq
-                                            C1
-                                            {geom}
-                                            $END
-                                            '''.format( scfmeth = 'RHF' if self.optInfo['spin'] =='1' else
-                                                                  'UHF' if self.optInfo['method'] =='b3lyp' else 'ROHF',
-                                                        lvl     = {'mp2':'MPLEVL=2','ump2':'MPLEVL=2',
-                                                                  'ccsd':'CCTYP=ccsd','uccsd':'CCTYP=ccsd',
-                                                                  'b3lyp':'DFTTYP=b3lyp'}.get(self.optInfo['method']),
-                                                        charge  = self.optInfo['charge'],
-                                                        spin    = self.optInfo['spin'],
-                                                        memory  = self.optInfo['memory'],
-                                                        memddi  = self.optInfo['memddi'],
-                                                        pre     = '$SCF DIRSCF=.TRUE. $END\n$CPHF CPHF=AO $END'
-                                                                  if self.optInfo['method'] == 'b3lyp' else '',
-                                                        post    = '$CCINP MAXCC =100 $END\n$FORCE METHOD=FULLNUM $END'
-                                                                  if self.optInfo['method'] in ['ccsd','uccsd'] else '',
-                                                        basis   = self.optInfo['basis'],
-                                                        geom    = geomDat.strip()))
+        # Use default 'symmetry' if not specified
+        symmetry = self.config['optInfo'].get('symmetry', self.config_defaults['symmetry'])
 
-        with open('optg.inp', 'w') as f: f.write(indent(gamessTemplate))
+        gamess_template = textwrap.dedent(f"""
+            $CONTRL SCFTYP={{self.resolve_scftype()}} {self.config['optInfo'].get('lvl')} RUNTYP=OPTIMIZE ICHARG={self.config['optInfo']['charge']}
+            COORD=UNIQUE MULT={self.config['optInfo']['spin']} MAXIT=200 ISPHER=1 $END
+            $SYSTEM MWORDS={self.config['optInfo']['memory']} MEMDDI ={self.config['optInfo']['memddi']} $END
+            $STATPT NSTEP=100 HSSEND=.T. $END
+            $BASIS  GBASIS={self.config['optInfo']['basis']} $END
+            $GUESS  GUESS=HUCKEL $END
+            $DATA
+            Geometry with {n_atoms} atoms
+            {symmetry}
+            {geom_data}
+            $END
+        """).strip()
 
+        with open('optg.inp', 'w') as f:
+            f.write(gamess_template)
+
+    def resolve_scftype(self):
+        method = self.config['optInfo']['method']
+        spin = self.config['optInfo']['spin']
+        if spin == '1':
+            return 'RHF'
+        elif method == 'b3lyp':
+            return 'UHF'
+        return 'ROHF'
 
 if __name__ == "__main__":
-    p = GamessOptg('gms.config')        
+    try:
+        p = GamessOptg('gms.config')
+        print("Input file has been generated successfully.")
+    except Exception as e:
+        print(f"Error: {str(e)}")
+
